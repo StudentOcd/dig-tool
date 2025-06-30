@@ -118,6 +118,10 @@ class GameOverlay:
         self.visible = False
         self.preview_label_overlay = None
 
+        self.drag_start_x = 0
+        self.drag_start_y = 0
+        self.is_dragging = False
+
     def create_overlay(self):
         if self.overlay: return
         self.overlay = tk.Toplevel()
@@ -139,11 +143,23 @@ class GameOverlay:
         except Exception:
             pass
 
-        Label(self.overlay, text="Dig Tool", fg='white', bg='black', font=('Consolas', 11, 'bold')).pack(pady=(5, 5))
+        self.title_frame = Frame(self.overlay, bg='#333333', cursor='fleur')
+        self.title_frame.pack(fill='x', padx=2, pady=(2, 0))
+
+        title_label = Label(self.title_frame, text="Dig Tool", fg='white', bg='#333333',
+                            font=('Consolas', 11, 'bold'), cursor='fleur')
+        title_label.pack(pady=3)
+
+        self.title_frame.bind('<Button-1>', self.start_drag)
+        self.title_frame.bind('<B1-Motion>', self.on_drag)
+        self.title_frame.bind('<ButtonRelease-1>', self.stop_drag)
+        title_label.bind('<Button-1>', self.start_drag)
+        title_label.bind('<B1-Motion>', self.on_drag)
+        title_label.bind('<ButtonRelease-1>', self.stop_drag)
 
         self.status_label = Label(self.overlay, text="STATUS: STOPPED", fg='red', bg='black',
                                   font=('Consolas', 10, 'bold'))
-        self.status_label.pack(pady=(0, 5), padx=5, fill='x')
+        self.status_label.pack(pady=(5, 5), padx=5, fill='x')
 
         self.target_label = Label(self.overlay, text="TARGET: ---", fg='red', bg='black', font=('Consolas', 10, 'bold'))
         self.target_label.pack(pady=(0, 5), padx=5, fill='x')
@@ -168,6 +184,12 @@ class GameOverlay:
                                    bg='black', font=('Consolas', 9))
         self.latency_label.grid(row=1, column=1, sticky='w', padx=10)
 
+        self.auto_walk_label = Label(stats_frame, text="WALK: OFF", fg='cyan', bg='black', font=('Consolas', 9))
+        self.auto_walk_label.grid(row=2, column=0, sticky='w')
+        self.auto_sell_label = Label(stats_frame, text="SELL: OFF", fg='cyan', bg='black', font=('Consolas', 9))
+        self.auto_sell_label.grid(row=2, column=1, sticky='w', padx=10)
+
+
         key_frame = Frame(self.overlay, bg='black', pady=5)
         key_frame.pack(padx=10, fill='x')
         self.toggle_bot_label = Label(key_frame, text=f"Bot: {self.parent.keybind_vars['toggle_bot'].get()}", fg='gray',
@@ -182,8 +204,30 @@ class GameOverlay:
 
         self.preview_label_overlay = Label(self.overlay, bg='black')
         self.preview_label_overlay.pack(pady=(5, 5), padx=5, fill='both', expand=True)
+
         self.position_overlay()
         self.visible = True
+
+    def start_drag(self, event):
+        self.is_dragging = True
+        self.drag_start_x = event.x_root
+        self.drag_start_y = event.y_root
+
+    def on_drag(self, event):
+        if self.is_dragging and self.overlay:
+            try:
+                x = self.overlay.winfo_x() + (event.x_root - self.drag_start_x)
+                y = self.overlay.winfo_y() + (event.y_root - self.drag_start_y)
+
+                self.overlay.geometry(f"+{x}+{y}")
+
+                self.drag_start_x = event.x_root
+                self.drag_start_y = event.y_root
+            except tk.TclError:
+                pass
+
+    def stop_drag(self, event):
+        self.is_dragging = False
 
     def position_overlay(self):
         if not self.overlay or not self.parent.game_area: return
@@ -206,9 +250,9 @@ class GameOverlay:
             else:
                 self.status_label.config(text="STATUS: STOPPED", fg='red')
 
-            target_locked = kwargs.get('sweet_spot_center') is not None
-            self.target_label.config(text=f"TARGET: {'LOCKED' if target_locked else '---'}",
-                                     fg='lime' if target_locked else 'red')
+            target_engaged = kwargs.get('target_engaged', False)
+            self.target_label.config(text=f"TARGET: {'LOCKED' if target_engaged else '---'}",
+                                     fg='lime' if target_engaged else 'red')
 
             locked_color = kwargs.get('locked_color_hex')
             self.color_swatch_overlay_label.config(bg=locked_color if locked_color else 'black')
@@ -220,6 +264,12 @@ class GameOverlay:
             self.pred_label.config(text=f"PRED: {'ON' if is_pred else 'OFF'}", fg='lime' if is_pred else 'red')
             self.latency_label.config(text=f"LAT: {self.parent.get_param('system_latency')}ms")
 
+            is_auto_walk = kwargs.get('auto_walk_enabled', False)
+            self.auto_walk_label.config(text=f"WALK: {'ON' if is_auto_walk else 'OFF'}", fg='lime' if is_auto_walk else 'red')
+
+            is_auto_sell = kwargs.get('auto_sell_enabled', False)
+            self.auto_sell_label.config(text=f"SELL: {'ON' if is_auto_sell else 'OFF'}", fg='lime' if is_auto_sell else 'red')
+            
             self.toggle_bot_label.config(text=f"Bot: {self.parent.keybind_vars['toggle_bot'].get().upper()}")
             self.toggle_gui_label.config(text=f"GUI: {self.parent.keybind_vars['toggle_gui'].get().upper()}")
             self.toggle_overlay_label.config(text=f"Ovl: {self.parent.keybind_vars['toggle_overlay'].get().upper()}")
